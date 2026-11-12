@@ -1,0 +1,4 @@
+flask
+yt-dlp
+youtube-transcript-api
+imageio-ffmpeg
