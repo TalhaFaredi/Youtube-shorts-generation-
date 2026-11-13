@@ -7,8 +7,14 @@ A local Flask web app for creating short-form video assets:
   - **Voice cloning**: clone any voice from a short clip (MP3, WAV, M4A, OGG…).
   - **Saved voices**: store cloned voices in SQLite and reuse them without re-uploading.
 - **YouTube extractor**: paste a link and get the transcript plus frames from the video.
+- **Transcript tools** (Qwen through [OpenRouter](https://openrouter.ai)), each with a choice of 10 output languages:
+  - **Translate** the transcript.
+  - **Change it** with your own instructions.
+  - **New video on a similar idea**: get several ideas first, then write the script for any of them.
 
-Everything runs on your own machine. No API keys are needed.
+  Pick the model from a list (Qwen 3.7 Plus by default). Every result is matched to the length of the original transcript.
+
+Voice generation and the YouTube extractor run on your own machine with no API keys. Only the transcript tools need an OpenRouter key, and they send the transcript text to OpenRouter.
 
 ## Screenshots
 
@@ -27,6 +33,8 @@ Everything runs on your own machine. No API keys are needed.
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)** package manager.
 - About **10 GB of free disk** for the model downloads.
 
+- An **OpenRouter API key**, only for the transcript tools.
+
 ffmpeg is bundled through the `imageio-ffmpeg` package, so you don't need to install it separately.
 
 ## Install and run
@@ -36,6 +44,12 @@ git clone https://github.com/TalhaFaredi/Voice-clonner-Application.git
 cd Voice-clonner-Application
 uv sync          # creates .venv and installs everything, including CUDA PyTorch
 uv run app.py
+```
+
+For the transcript tools, create a `.env` file in the project folder first:
+
+```
+open_router_api=sk-or-...
 ```
 
 Open **http://127.0.0.1:5000**.
@@ -74,8 +88,20 @@ Set these as environment variables before `uv run app.py`:
 | `CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Model for cloning and saved voices |
 | `TTS_DEVICE` | `cuda:0` | GPU to use |
 | `HF_HOME` | Hugging Face default | Where models are cached |
+| `open_router_api` | – | OpenRouter API key (also read from `OPENROUTER_API_KEY`) |
+| `OPENROUTER_MODEL` | `qwen/qwen3.7-plus` | Default model for the transcript tools |
 
 ## Using the app
+
+**Transcript tools**: extract a video, then open the **Translate / rewrite** tab.
+1. Pick what to do: translate, change it with your own instructions, or a new video on a similar idea.
+2. Pick the output language: Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish or Italian.
+3. Pick the model. Qwen 3.7 Plus is the default; the list is `MODELS` in `llm.py`.
+4. Click **Generate**. The result appears in the box next to the original and can be edited and copied.
+
+For a **new video**, the button is **Suggest ideas**: you get 5 ideas, each with a title and a short description. Click **Write script** on any of them to see its script; you can write scripts for several ideas and switch between them with **Show script**.
+
+**How the length is matched:** the app counts the original transcript, asks the model for a draft, counts the draft itself, and sends back only the sentences that need to grow or shrink, each with an exact length. Models often deliver only part of the change they are asked for, so each correction asks for more, based on how much the previous one delivered. It stops within 3% of the original (at least ±2 words for short texts) or after 5 corrections, and shows both lengths. Words are counted for most languages and characters for Chinese and Japanese. Across languages that are counted differently, it converts with the length of a natural translation (about 1.5 Chinese characters, 2.25 Japanese characters or 0.75 Korean words per English word).
 
 **Preset voices**: type text, pick a speaker and language, and optionally add a style instruction.
 
@@ -112,6 +138,7 @@ data/
 | `tts.py` | Qwen3-TTS loading, preset generation, cloning, saved voices |
 | `db.py` | SQLite access |
 | `youtube.py` | YouTube transcript and frame extraction |
+| `llm.py` | Transcript tools through OpenRouter, with length matching |
 | `config.py` | Paths, model names, device |
 | `index.html` | Web page (vanilla HTML/JS) |
 | `pyproject.toml` / `uv.lock` | Dependencies |
@@ -129,6 +156,10 @@ data/
 | POST | `/api/voices/<id>/generate` | JSON: `text`, `language` | `audio_url` |
 | DELETE | `/api/voices/<id>` | – | `ok` |
 | POST | `/api/extract` | JSON: `url`, `interval?` | transcript and frames |
+| GET | `/api/text/languages` | – | list of output languages |
+| GET | `/api/text/models` | – | list of models, default first |
+| POST | `/api/text/ideas` | JSON: `language`, `text`, `model?`, `prompt?` | list of `title`, `pitch` |
+| POST | `/api/text/generate` | JSON: `mode` (`translate`, `custom`, `idea`), `language`, `text`, `model?`, `prompt?`, `idea?` (required for `idea`) | `text`, `count`, `target`, `unit`, `within_tolerance`, `source_count`, `source_unit` |
 
 ## Troubleshooting
 

@@ -23,6 +23,7 @@
   button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); padding:6px 12px; font-weight:500; }
   button:disabled { opacity:.6; cursor:wait; }
   .row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
   .actions { margin-top:16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   .status { color:var(--muted); font-size:.9rem; }
   .status.err { color:var(--accent); }
@@ -50,7 +51,7 @@
   .grid figure { margin:0; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .grid img { width:100%; display:block; }
   .grid figcaption { padding:6px 10px; }
-  #yt-ta { min-height:380px; }
+  #yt-ta, textarea.tall { min-height:380px; }
 
   /* Saved voices */
   .voice { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
@@ -58,7 +59,14 @@
   .voice small { color:var(--muted); display:block; }
   .voice.sel strong { color:var(--accent); }
 
-  @media (max-width:640px) { .row2, .frame-row { grid-template-columns:1fr; } }
+  /* Video ideas */
+  #ai-ideas { margin-top:16px; display:grid; gap:10px; }
+  .idea { border:1px solid var(--line); border-radius:8px; padding:12px; display:flex; gap:12px; justify-content:space-between; align-items:flex-start; }
+  .idea.sel { border-color:var(--accent); }
+  .idea p { margin:4px 0 0; color:var(--muted); font-size:.92rem; }
+  .idea button { flex:none; }
+
+  @media (max-width:640px) { .row2, .row3, .frame-row, .idea { grid-template-columns:1fr; } .idea { flex-direction:column; } }
 </style>
 </head>
 <body>
@@ -83,6 +91,7 @@
         <button data-tab="yt-timeline" class="on">Timeline</button>
         <button data-tab="yt-text">Full text</button>
         <button data-tab="yt-frames">Frames only</button>
+        <button data-tab="yt-ai">Translate / rewrite</button>
       </div>
       <div id="yt-timeline"></div>
       <div id="yt-text" hidden>
@@ -90,6 +99,34 @@
         <textarea id="yt-ta" readonly></textarea>
       </div>
       <div id="yt-frames" class="grid" hidden></div>
+      <div id="yt-ai" class="card" hidden>
+        <div class="row3">
+          <div>
+            <label>What to do</label>
+            <select id="ai-mode">
+              <option value="translate">Translate the transcript</option>
+              <option value="custom">Change it with my own instructions</option>
+              <option value="idea">New video on a similar idea</option>
+            </select>
+          </div>
+          <div><label>Output language</label><select id="ai-lang"></select></div>
+          <div><label>Model</label><select id="ai-model"></select></div>
+        </div>
+        <div id="ai-prompt-wrap" hidden>
+          <label id="ai-prompt-label"></label>
+          <textarea id="ai-prompt"></textarea>
+        </div>
+        <div class="actions"><button id="ai-go">Generate</button><span class="status" id="ai-status"></span></div>
+        <div id="ai-ideas" hidden></div>
+        <div class="row2">
+          <div><label>Original transcript</label><textarea id="ai-src" class="tall" readonly></textarea></div>
+          <div>
+            <label>Result <span id="ai-length"></span></label>
+            <textarea id="ai-out" class="tall" placeholder="The result appears here. You can edit it."></textarea>
+            <div class="actions" style="margin-top:8px"><button class="ghost" id="ai-copy">Copy result</button></div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -213,6 +250,9 @@ $('yt-form').onsubmit = async e => {
     tl.appendChild(row);
   });
   $('yt-ta').value = d.transcript.map(s => `[${fmt(s.start)}] ${s.text}`).join('\n') || '(no transcript available)';
+  $('ai-src').value = d.transcript.map(s => s.text).join(' ');
+  $('ai-out').value = ''; $('ai-length').textContent = '';
+  showIdeas([]);
   $('yt-frames').innerHTML = d.frames.map(fr =>
     `<figure><a href="${fr.url}" target="_blank"><img loading="lazy" src="${fr.url}"></a><figcaption><a class="t" target="_blank" href="${link(fr.time)}">▶ ${fmt(fr.time)}</a></figcaption></figure>`).join('');
   $('yt-out').hidden = false;
@@ -220,6 +260,76 @@ $('yt-form').onsubmit = async e => {
 $('yt-copy').onclick = async () => {
   await navigator.clipboard.writeText($('yt-ta').value);
   $('yt-copy').textContent = 'Copied!'; setTimeout(() => $('yt-copy').textContent = 'Copy text', 1500);
+};
+
+// ---------- transcript tools: translate / custom changes / new idea ----------
+const fillSelect = (id, url) => fetch(url).then(r => r.json()).then(items =>
+  $(id).innerHTML = items.map(x => `<option>${x}</option>`).join(''));
+fillSelect('ai-lang', '/api/text/languages');
+fillSelect('ai-model', '/api/text/models');   // first one (Qwen 3.7 Plus) is the default
+
+const AI_PROMPTS = {
+  custom: ['What should change?', 'e.g. Make it funnier and aimed at students. Remove the sponsor part.'],
+  idea: ['Extra direction for the ideas (optional)', 'e.g. Make them about cooking instead.'],
+};
+$('ai-mode').onchange = () => {
+  const mode = $('ai-mode').value, p = AI_PROMPTS[mode];
+  $('ai-prompt-wrap').hidden = !p;
+  if (p) { $('ai-prompt-label').textContent = p[0]; $('ai-prompt').placeholder = p[1]; }
+  $('ai-go').textContent = mode === 'idea' ? 'Suggest ideas' : 'Generate';
+  $('ai-ideas').hidden = mode !== 'idea' || !ideas.length;
+};
+
+const aiBody = mode => ({
+  mode, language: $('ai-lang').value, model: $('ai-model').value,
+  text: $('ai-src').value, prompt: AI_PROMPTS[mode] ? $('ai-prompt').value : '',
+});
+function showResult(d, label = '') {
+  $('ai-out').value = d.text;
+  $('ai-length').textContent = `· ${label}${d.count} ${d.unit}, target ${d.target} ${d.unit}`
+    + (d.unit !== d.source_unit || d.target !== d.source_count ?` (same speaking length as the original ${d.source_count} ${d.source_unit})` : '')
+    + (d.within_tolerance ? '' : ' · length is off, try again');
+}
+
+// New video ideas: suggest several, the user writes (and compares) the scripts of any of them.
+let ideas = [], scripts = {};
+function showIdeas(list) {
+  ideas = list; scripts = {};
+  $('ai-ideas').hidden = !list.length;
+  $('ai-ideas').innerHTML = '';
+  list.forEach((idea, i) => {
+    const el = document.createElement('div'); el.className = 'idea';
+    el.innerHTML = `<div><strong></strong><p></p></div><button class="ghost">Write script</button>`;
+    el.querySelector('strong').textContent = `${i + 1}. ${idea.title}`;
+    el.querySelector('p').textContent = idea.pitch;
+    el.querySelector('button').onclick = () => writeScript(i, el.querySelector('button'));
+    $('ai-ideas').appendChild(el);
+  });
+}
+async function writeScript(i, btn) {
+  [...$('ai-ideas').children].forEach((el, j) => el.classList.toggle('sel', j === i));
+  const key = [i, $('ai-lang').value, $('ai-model').value].join('|');   // a new language or model writes a new script
+  if (!scripts[key]) {
+    const d = await call('/api/text/generate', json({ ...aiBody('idea'), idea: ideas[i] }), $('ai-status'), btn);
+    if (!d) return;
+    scripts[key] = d; btn.textContent = 'Show script';
+  }
+  showResult(scripts[key], `idea ${i + 1} · `);
+}
+
+$('ai-go').onclick = async () => {
+  const mode = $('ai-mode').value;
+  if (mode === 'idea') {
+    const list = await call('/api/text/ideas', json(aiBody(mode)), $('ai-status'), $('ai-go'));
+    if (list) showIdeas(list);
+    return;
+  }
+  const d = await call('/api/text/generate', json(aiBody(mode)), $('ai-status'), $('ai-go'));
+  if (d) showResult(d);
+};
+$('ai-copy').onclick = async () => {
+  await navigator.clipboard.writeText($('ai-out').value);
+  $('ai-copy').textContent = 'Copied!'; setTimeout(() => $('ai-copy').textContent = 'Copy result', 1500);
 };
 
 // ================= Voice =================

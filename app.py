@@ -7,6 +7,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 import db
+import llm
 import tts
 import youtube
 from config import BASE_DIR, DATA_DIR
@@ -49,6 +50,67 @@ def extract():
         video_id=vid, title=info.get("title"), channel=info.get("uploader"), duration=info.get("duration"),
         interval=used_interval, transcript=transcript, transcript_error=t_err, frames=frames,
     )
+
+
+# ---------- Transcript text tools ----------
+
+@app.get("/api/text/languages")
+def text_languages():
+    return jsonify(llm.LANGUAGES)
+
+
+@app.get("/api/text/models")
+def text_models():
+    return jsonify(llm.MODELS)
+
+
+def _text_request():
+    """Common fields of the transcript-tool requests, or an error message."""
+    d = request.get_json(force=True)
+    f = {
+        "language": d.get("language"),
+        "model": d.get("model") or llm.MODELS[0],
+        "text": (d.get("text") or "").strip(),
+        "prompt": (d.get("prompt") or "").strip(),
+    }
+    if f["language"] not in llm.LANGUAGES:
+        return d, f, "Unknown language."
+    if f["model"] not in llm.MODELS:
+        return d, f, "Unknown model."
+    if not f["text"]:
+        return d, f, "There is no transcript text to work with."
+    return d, f, None
+
+
+@app.post("/api/text/ideas")
+def text_ideas():
+    """Several new video ideas similar to the transcript."""
+    _, f, error = _text_request()
+    if error:
+        return _err(error)
+    try:
+        return jsonify(llm.ideas(f["text"], f["language"], f["model"], f["prompt"]))
+    except Exception as e:
+        return _err(str(e), 502)
+
+
+@app.post("/api/text/generate")
+def text_generate():
+    """mode: translate | custom | idea. Result length is matched to the source text."""
+    d, f, error = _text_request()
+    mode, idea = d.get("mode"), d.get("idea")
+    if error:
+        return _err(error)
+    if mode not in llm.TASKS:
+        return _err("Unknown mode.")
+    if mode == "custom" and not f["prompt"]:
+        return _err("Describe the changes you want.")
+    if mode == "idea" and not (isinstance(idea, dict) and idea.get("title")):
+        return _err("Pick an idea first.")
+    try:
+        return jsonify(llm.generate(mode, f["text"], f["language"], f["model"], f["prompt"], idea))
+    except Exception as e:
+        return _err(str(e), 502)
 
 
 # ---------- Voice ----------
