@@ -65,6 +65,54 @@
   .idea.sel { border-color:var(--accent); }
   .idea p { margin:4px 0 0; color:var(--muted); font-size:.92rem; }
   .idea button { flex:none; }
+  [hidden] { display:none !important; }
+  fieldset { border:0; padding:0; margin:0; min-width:0; }
+  .job-picker { display:flex; gap:8px; align-items:center; margin:14px 0; }
+  .job-picker select { flex:1; }
+  .download { display:inline-block; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 12px; text-decoration:none; font-size:.9rem; }
+  .build { color:var(--muted); font-size:.75rem; margin:-12px 0 12px; }
+
+  /* Generate Video */
+  #yt-video { padding:0; overflow:visible; }
+  #yt-video > .inner { padding:16px; }
+  .vpanel { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; border-radius:10px 10px 0 0; box-shadow:0 4px 12px rgba(0,0,0,.18); }
+  .vpanel .head { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:baseline; font-size:.88rem; color:var(--muted); }
+  .vpanel .head strong { color:var(--text); font-size:1rem; }
+  .vpanel .stepline { margin:6px 0 4px; font-weight:600; }
+  .vpanel progress { width:100%; height:8px; accent-color:var(--accent); }
+  .money { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-top:8px; }
+  .money div { border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  .money small { display:block; color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; }
+  .money b { font-size:1.1rem; font-variant-numeric:tabular-nums; }
+  .money input { width:90px; padding:2px 6px; font-size:1rem; }
+  .tag { display:inline-block; font-size:.7rem; padding:1px 6px; border-radius:10px; border:1px solid var(--line); color:var(--muted); vertical-align:middle; }
+  .tag.ok { border-color:#2e9e5b; color:#2e9e5b; } .tag.bad { border-color:var(--accent); color:var(--accent); } .tag.run { border-color:#d69e2e; color:#d69e2e; }
+  .vpanel .msg { margin:8px 0 0; font-size:.92rem; }
+  .vpanel .msg.err { color:var(--accent); }
+  .note-list { margin:8px 0 0; padding-left:18px; color:var(--muted); font-size:.85rem; }
+  table.t { width:100%; border-collapse:collapse; font-size:.85rem; }
+  table.t th, table.t td { border-bottom:1px solid var(--line); padding:6px; text-align:left; vertical-align:top; }
+  table.t th { color:var(--muted); font-weight:500; }
+  table.t td.num, table.t th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .plan td.media { width:180px; }
+  .plan td.media img, .plan td.media video { width:170px; border-radius:6px; display:block; background:#000; }
+  .plan textarea { min-height:120px; font-size:.82rem; }
+  .plan .text { min-width:160px; }
+  .plan .acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .plan .acts button { padding:4px 10px; font-size:.82rem; }
+  .why { color:var(--muted); font-size:.8rem; margin-top:4px; }
+  .disabled-why { color:var(--muted); font-size:.85rem; margin:6px 0 0; }
+  .vlog { background:#0b0d11; color:#cfd6e2; font:12px/1.45 ui-monospace,Consolas,monospace; padding:10px; border-radius:8px; max-height:420px; overflow:auto; white-space:pre-wrap; word-break:break-word; }
+  .modes { display:flex; gap:8px; flex-wrap:wrap; }
+  .modes label { display:flex; gap:6px; align-items:center; margin:0; padding:8px 12px; border:1px solid var(--line); border-radius:8px; color:var(--text); cursor:pointer; }
+  .inputs { font-size:.88rem; }
+  .inputs ul { margin:4px 0; padding-left:18px; }
+  .frames-used { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
+  .frames-used img { height:64px; border-radius:4px; }
+  details.box { border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:12px; }
+  details.box > summary { cursor:pointer; font-weight:600; }
+  .final video { display:block; max-width:100%; max-height:600px; margin:8px auto; background:#000; }
+  @media (max-width:640px) { .money { grid-template-columns:1fr 1fr; } .plan td.media img, .plan td.media video { width:110px; } }
 
   @media (max-width:640px) { .row2, .row3, .frame-row, .idea { grid-template-columns:1fr; } .idea { flex-direction:column; } }
 </style>
@@ -72,6 +120,8 @@
 <body>
 <main>
   <h1>YouTube Automation</h1>
+  <p class="build" id="build" data-build="__BUILD__">Build __BUILD__ · server started __STARTED__</p>
+  <p class="status err" id="app-health" role="alert" hidden></p>
   <div class="tabs main" data-group="main">
     <button data-tab="yt" class="on">YouTube extractor</button>
     <button data-tab="voice">Voice generation</button>
@@ -85,13 +135,23 @@
       <button id="yt-go">Extract</button>
     </form>
     <p class="status" id="yt-status"></p>
+    <div class="job-picker"><label for="job-select" style="margin:0">Saved jobs</label><select id="job-select"><option value="">Choose a job</option></select><button class="ghost" id="job-open">Open</button></div>
+    <div id="job-problem" class="card" hidden>
+      <p id="job-problem-text" style="margin:0"></p>
+      <div class="actions" style="margin-top:10px">
+        <input type="text" id="reextract-url" placeholder="YouTube link of this video" hidden style="flex:1 1 280px; width:auto">
+        <button id="reextract-go">Re-extract this video</button><span class="status" id="reextract-status"></span>
+      </div>
+    </div>
     <div id="yt-out" hidden>
       <div class="meta"><h2 id="yt-title"></h2><p id="yt-info"></p></div>
+      <div class="actions" style="margin:0 0 16px"><span class="status">Transcript → Visual plan → Final video</span><button id="open-video">Generate Video</button></div>
       <div class="tabs" data-group="yt">
         <button data-tab="yt-timeline" class="on">Timeline</button>
         <button data-tab="yt-text">Full text</button>
         <button data-tab="yt-frames">Frames only</button>
         <button data-tab="yt-ai">Translate / rewrite</button>
+        <button data-tab="yt-video" id="video-tab">Generate Video</button>
       </div>
       <div id="yt-timeline"></div>
       <div id="yt-text" hidden>
@@ -124,6 +184,84 @@
             <label>Result <span id="ai-length"></span></label>
             <textarea id="ai-out" class="tall" placeholder="The result appears here. You can edit it."></textarea>
             <div class="actions" style="margin-top:8px"><button class="ghost" id="ai-copy">Copy result</button></div>
+          </div>
+        </div>
+      </div>
+      <div id="yt-video" class="card" hidden>
+        <!-- Sticky panel: always visible while a session is open -->
+        <div class="vpanel" id="vp" hidden>
+          <div class="head">
+            <strong id="vp-title"></strong>
+            <span id="vp-session"></span><span id="vp-started"></span><span id="vp-elapsed"></span>
+            <span id="vp-status"></span>
+          </div>
+          <div class="head" id="vp-models"></div>
+          <div class="stepline" id="vp-step"></div>
+          <progress id="vp-progress" max="100" value="0"></progress>
+          <div class="money">
+            <div><small>Spent so far</small><b id="vp-spent">$0</b> <span class="tag" id="vp-spent-kind">actual</span></div>
+            <div><small>Estimated total</small><b id="vp-total">$0</b> <span class="tag">estimated</span></div>
+            <div><small>Budget cap</small><b>$<input type="number" id="vp-budget" min="0.01" max="500" step="0.5"></b></div>
+            <div><small>Remaining</small><b id="vp-remaining">$0</b></div>
+          </div>
+          <p class="msg" id="vp-msg"></p>
+          <div class="actions" style="margin-top:8px">
+            <button id="vp-approve" hidden>Approve &amp; generate</button>
+            <button id="vp-resume" class="ghost" hidden>Resume</button>
+            <button id="vp-new" class="ghost">New session</button>
+            <span class="status" id="vp-action-status"></span>
+          </div>
+        </div>
+
+        <div class="inner">
+          <div class="job-picker" id="vs-picker" hidden><label for="vs-select" style="margin:0">Video sessions</label><select id="vs-select"></select></div>
+
+          <!-- New session setup -->
+          <div id="vs-setup">
+            <h2 style="margin-top:0">Generate Video</h2>
+            <p class="status">AI-generated visuals that follow the script, played over this job's narration. First the planner proposes the visuals with a cost estimate; nothing is generated until you approve it.</p>
+            <div class="inputs card" id="vs-inputs" style="padding:10px 12px">Loading this job's inputs…</div>
+            <label>Output</label>
+            <div class="modes">
+              <label><input type="radio" name="vs-mode" value="images" checked> Images only</label>
+              <label><input type="radio" name="vs-mode" value="videos"> Videos only</label>
+              <label><input type="radio" name="vs-mode" value="mixed"> Videos + Images</label>
+            </div>
+            <div class="row3">
+              <div><label for="vs-planner">Planning model (OpenRouter)</label><select id="vs-planner"></select><p class="why" id="vs-planner-note"></p></div>
+              <div id="vs-image-wrap"><label for="vs-image">Image model (OpenRouter)</label><select id="vs-image"></select><p class="why" id="vs-image-note"></p></div>
+              <div id="vs-video-wrap" hidden><label for="vs-video">Video model</label><select id="vs-video" disabled></select><p class="why" id="vs-video-note"></p></div>
+            </div>
+            <div class="row3">
+              <div><label for="vs-budget">Budget cap (USD)</label><input type="number" id="vs-budget" min="0.01" max="500" step="0.5" value="5"></div>
+              <div><label for="vs-min">Minimum seconds per visual</label><input type="number" id="vs-min" min="1" max="20" step="0.5" value="2.5"></div>
+              <div id="vs-quality-wrap"><label for="vs-quality">Image quality</label><select id="vs-quality"></select></div>
+            </div>
+            <details class="box"><summary>Planner system prompt (editable)</summary>
+              <textarea id="vs-system" style="min-height:300px; margin-top:8px; font:12px/1.45 ui-monospace,Consolas,monospace"></textarea>
+              <div class="actions" style="margin-top:6px"><button class="ghost" id="vs-system-reset">Reset to default</button></div>
+            </details>
+            <div class="actions"><button id="vs-plan" disabled>Plan visuals</button><span class="status" id="vs-plan-status"></span></div>
+            <p class="disabled-why" id="vs-plan-why"></p>
+          </div>
+
+          <!-- Session view -->
+          <div id="vs-view" hidden>
+            <ul class="note-list" id="vs-notes"></ul>
+            <div class="final card" id="vs-final" hidden style="margin-top:12px">
+              <h3 style="margin:0 0 6px">Final video</h3>
+              <video id="vs-final-video" controls preload="metadata" playsinline></video>
+              <p class="status" id="vs-final-facts"></p>
+              <a class="download" id="vs-final-download">Download final MP4</a>
+              <details class="box"><summary>Final checks</summary><table class="t" id="vs-checks"></table></details>
+            </div>
+            <h3>Plan and visuals</h3>
+            <p class="status" id="vs-style"></p>
+            <div style="overflow-x:auto"><table class="t plan" id="vs-plan-table"></table></div>
+            <details class="box" open><summary>Cost by step</summary><div style="overflow-x:auto"><table class="t" id="vs-ledger"></table></div>
+              <p class="status" id="vs-balance"></p></details>
+            <details class="box" open><summary>Inputs used</summary><div class="inputs" id="vs-used"></div></details>
+            <details class="box" open><summary>Activity log</summary><div class="vlog" id="vs-log"></div></details>
           </div>
         </div>
       </div>
@@ -233,10 +371,22 @@ $('yt-form').onsubmit = async e => {
   const st = $('yt-status');
   const d = await call('/api/extract', json({ url: $('yt-url').value, interval: $('yt-interval').value }), st, $('yt-go'));
   if (!d) return;
+  displayJob(d);
+  loadJobs();
+};
+function displayJob(d) {
+  const st = $('yt-status');
+  st.className = 'status'; st.textContent = '';
   if (d.transcript_error) { st.className = 'status err'; st.textContent = d.transcript_error; }
+  currentJob = d;
+  localStorage.setItem('youtube-current-job', d.job_id);
+  $('job-select').value = d.job_id;
+  showJobProblem(d);
+  if (d.legacy) { $('yt-out').hidden = true; return; }
 
   const link = t => `https://www.youtube.com/watch?v=${d.video_id}&t=${Math.floor(t)}s`;
   $('yt-title').textContent = d.title || d.video_id;
+  $('yt-url').value = `https://www.youtube.com/watch?v=${d.video_id}`;
   $('yt-info').textContent = [d.channel, d.duration && fmt(d.duration), `${d.frames.length} frames, 1 every ${d.interval}s`].filter(Boolean).join(' · ');
 
   const tl = $('yt-timeline'); tl.innerHTML = '';
@@ -256,7 +406,8 @@ $('yt-form').onsubmit = async e => {
   $('yt-frames').innerHTML = d.frames.map(fr =>
     `<figure><a href="${fr.url}" target="_blank"><img loading="lazy" src="${fr.url}"></a><figcaption><a class="t" target="_blank" href="${link(fr.time)}">▶ ${fmt(fr.time)}</a></figcaption></figure>`).join('');
   $('yt-out').hidden = false;
-};
+  videoJobChanged();
+}
 $('yt-copy').onclick = async () => {
   await navigator.clipboard.writeText($('yt-ta').value);
   $('yt-copy').textContent = 'Copied!'; setTimeout(() => $('yt-copy').textContent = 'Copy text', 1500);
@@ -331,6 +482,327 @@ $('ai-copy').onclick = async () => {
   await navigator.clipboard.writeText($('ai-out').value);
   $('ai-copy').textContent = 'Copied!'; setTimeout(() => $('ai-copy').textContent = 'Copy result', 1500);
 };
+
+// ================= Generate Video =================
+// The page only shows server state: sessions run in the background on the server and survive a refresh.
+let currentJob = null, catalog = null, jobOptions = null, session = null, pollTimer = null, logNext = 0, pollSeq = 0;
+const money = v => v == null ? '–' : (Math.abs(v) < 1 ? '$' + v.toFixed(4) : '$' + v.toFixed(2));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const secs = s => s == null ? '' : (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`);
+const mode = () => document.querySelector('input[name=vs-mode]:checked').value;
+const pricePlanner = m => `${m.name} · $${m.price_in.toFixed(2)} in / $${m.price_out.toFixed(2)} out per M tokens`;
+const priceImage = m => `${m.name} · ~${money(m.estimate.cost)}/image`;
+const getJSON = async (url, opts) => { const r = await fetch(url, opts); const d = await r.json(); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); return d; };
+$('open-video').onclick = () => openTab('yt-video');
+
+// ---- saved jobs ----
+async function loadJobs() {
+  try {
+    const list = await getJSON('/api/jobs');
+    $('job-select').replaceChildren(new Option('Choose a job', ''), ...list.map(j => {
+      const name = j.legacy ? `Older job ${j.job_id} (${j.frames} JPGs only – media missing)` : `${j.title || j.video_id} · ${fmt(j.duration)}`;
+      const cost = j.video.sessions ? ` · ${j.video.sessions} video session${j.video.sessions > 1 ? 's' : ''}, ${money(j.video.cost)} spent` : '';
+      return new Option(name + cost, j.job_id);
+    }));
+    if (currentJob) $('job-select').value = currentJob.job_id;
+    return list;
+  } catch (e) { $('yt-status').className = 'status err'; $('yt-status').textContent = 'Could not load saved jobs: ' + e.message; return []; }
+}
+async function openJob(id) {
+  if (!id) return;
+  const job = await call(`/api/jobs/${id}`, {}, $('yt-status'), $('job-open'));
+  if (job) displayJob(job);
+}
+$('job-open').onclick = () => openJob($('job-select').value);
+function showJobProblem(job) {
+  const m = job.media || {};
+  $('job-problem').hidden = m.usable !== false;
+  $('job-problem-text').textContent = m.problem || '';
+  $('reextract-url').hidden = !!job.video_id;
+  $('reextract-status').textContent = '';
+}
+$('reextract-go').onclick = async () => {
+  const st = $('reextract-status');
+  const job = await call(`/api/jobs/${currentJob.job_id}/reextract`, json({ url: $('reextract-url').value }), st, $('reextract-go'));
+  if (job) { st.textContent = 'Re-extracted.'; displayJob(job); loadJobs(); }
+};
+
+// ---- setup form ----
+async function loadCatalog() {
+  try {
+    catalog = await getJSON('/api/video/catalog');
+  } catch (e) { $('vs-plan-why').textContent = 'Could not load the model list: ' + e.message; return; }
+  const d = catalog.defaults || {};
+  $('vs-planner').replaceChildren(...catalog.planner_models.map(m => new Option(pricePlanner(m) + (m.id === d.planner?.id ? ' (default)' : ''), m.id)));
+  $('vs-image').replaceChildren(...catalog.image_models.map(m => new Option(priceImage(m) + (m.id === d.image?.id ? ' (default)' : ''), m.id)));
+  $('vs-video').replaceChildren(...catalog.video_models.filter(m => m.id === d.video?.id).map(m =>
+    new Option(`${m.name} via OpenRouter · $${m.pricing.duration_seconds_480p}/s at 480p, $${m.pricing.duration_seconds_768p}/s at 768p`, m.id)));
+  if (d.planner?.id) $('vs-planner').value = d.planner.id;
+  if (d.image?.id) $('vs-image').value = d.image.id;
+  $('vs-planner-note').textContent = d.planner?.note || 'Exact model found in OpenRouter\'s live catalog.';
+  $('vs-image-note').textContent = d.image?.note || 'Exact model found in OpenRouter\'s live catalog.';
+  $('vs-video-note').textContent = (d.video?.note || 'HeyGen Video runs through your OpenRouter key; no HeyGen key is needed.')
+    + ' This list is fixed: HeyGen Video is the only video model this app uses.';
+  $('vs-system').value = catalog.system_prompt;
+  $('vs-budget').value = catalog.default_budget;
+  fillQuality();
+  updateSetup();
+}
+function fillQuality() {
+  const m = catalog?.image_models.find(x => x.id === $('vs-image').value);
+  const q = m?.qualities || [];
+  $('vs-quality').replaceChildren(...(q.length ? q : ['model default']).map(x => new Option(x, q.length ? x : '')));
+  if (q.includes('medium')) $('vs-quality').value = 'medium';
+  $('vs-quality').disabled = !q.length;
+  $('vs-quality').title = q.length ? '' : 'This image model has no quality setting.';
+}
+$('vs-image').onchange = () => { fillQuality(); updateSetup(); };
+$('vs-system-reset').onclick = () => { if (catalog) $('vs-system').value = catalog.system_prompt; };
+document.querySelectorAll('input[name=vs-mode]').forEach(r => r.onchange = updateSetup);
+function updateSetup() {
+  const m = mode();
+  $('vs-image-wrap').hidden = m === 'videos';
+  $('vs-quality-wrap').hidden = m === 'videos';
+  $('vs-video-wrap').hidden = m === 'images';
+  // Every disabled state says why.
+  const why = [];
+  if (!currentJob) why.push('Open a saved job first.');
+  else if (currentJob.media && !currentJob.media.usable) why.push(currentJob.media.problem);
+  else if (jobOptions && !jobOptions.usable) why.push(jobOptions.problem);
+  else if (!jobOptions) why.push('Loading this job\'s inputs…');
+  if (!catalog) why.push('Loading the live model list from OpenRouter…');
+  else if (catalog.error) why.push(catalog.error);
+  else if (!catalog.keys.openrouter) why.push('The OpenRouter key is missing: add open_router_api=sk-or-... to .env and restart the app.');
+  if (m !== 'images' && catalog && !catalog.error && !catalog.video_models.some(v => v.id === catalog.defaults.video?.id))
+    why.push('HeyGen Video is not in OpenRouter\'s catalog right now, so the video modes cannot run.');
+  if (session && session.running) why.push('A session of this job is running.');
+  $('vs-plan').disabled = why.length > 0;
+  $('vs-plan-why').textContent = why.length ? 'Plan visuals is disabled: ' + why.join(' ')
+    : 'Planning costs about one cent. Nothing else is paid for until you approve the plan.';
+}
+async function loadJobOptions() {
+  jobOptions = null; updateSetup();
+  if (!currentJob || (currentJob.media && !currentJob.media.usable)) { $('vs-inputs').textContent = currentJob?.media?.problem || ''; return; }
+  const jid = currentJob.job_id;
+  try { jobOptions = await getJSON(`/api/jobs/${jid}/video-options`); }
+  catch (e) { $('vs-inputs').textContent = 'Could not read this job\'s inputs: ' + e.message; return; }
+  const o = jobOptions;
+  if (!o.usable) { $('vs-inputs').textContent = o.problem; updateSetup(); return; }
+  $('vs-inputs').innerHTML = `<b>Inputs read from this saved job</b><ul>
+    <li>Narration: <b>${esc(o.narration.label)}</b> – ${esc(o.source_files.audio)}, ${o.narration.seconds.toFixed(2)} s</li>
+    <li>Script: the job's timestamped transcript (${currentJob.transcript.length} lines)</li>
+    <li>Original video: ${esc(o.source_files.video)}, ${o.width}x${o.height}, ${o.original_seconds.toFixed(2)} s · the final video will be ${o.video_seconds.toFixed(2)} s (limit ${(o.original_seconds * 1.05).toFixed(2)} s)</li>
+    <li>Source frames: ${o.source_files.frames.length} JPGs (up to 8 are shown to the planner, which picks references for the image model)</li></ul>
+    <div class="frames-used">${o.source_files.frames.map(f => `<img src="/media/jobs/${jid}/${f}" title="${esc(f)}" loading="lazy">`).join('')}</div>`;
+  updateSetup();
+}
+$('vs-plan').onclick = async () => {
+  const body = { mode: mode(), planner_model: $('vs-planner').value, image_model: $('vs-image').value,
+    image_quality: $('vs-quality').value || null, budget: +$('vs-budget').value, min_seconds: +$('vs-min').value,
+    system_prompt: $('vs-system').value };
+  const s = await call(`/api/jobs/${currentJob.job_id}/video-sessions`, json(body), $('vs-plan-status'), $('vs-plan'));
+  if (s) await loadSessions(s.id);
+};
+
+// ---- sessions ----
+function videoJobChanged() {
+  stopPolling(); session = null; jobOptions = null;
+  $('vp').hidden = true; $('vs-view').hidden = true; $('vs-setup').hidden = false;
+  loadJobOptions(); loadSessions();
+}
+const sessionLabel = s => `${s.id} · ${s.mode_name} · ${(STATUS[s.status] || [s.status])[0]} · ${s.done}/${s.visuals} visuals · ${money(s.cost)} spent${s.has_final ? ' · video ready' : ''}`;
+async function loadSessions(select) {
+  if (!currentJob) return;
+  const jid = currentJob.job_id;
+  let list = [];
+  try { list = await getJSON(`/api/jobs/${jid}/video-sessions`); } catch (e) { list = []; }
+  if (currentJob?.job_id !== jid) return;
+  $('vs-picker').hidden = !list.length;
+  $('vs-select').replaceChildren(new Option('+ New session', ''), ...list.map(s => new Option(sessionLabel(s), s.id)));
+  const pick = select || list.find(s => ['planning', 'generating', 'assembling'].includes(s.status))?.id || list[0]?.id || '';
+  $('vs-select').value = pick;
+  showSession(pick);
+}
+$('vs-select').onchange = () => showSession($('vs-select').value);
+$('vp-new').onclick = () => { $('vs-select').value = ''; showSession(''); };
+function stopPolling() { clearTimeout(pollTimer); pollTimer = null; pollSeq++; }
+async function showSession(id) {
+  stopPolling();
+  if (!id) { session = null; $('vp').hidden = true; $('vs-view').hidden = true; $('vs-setup').hidden = false; updateSetup(); return; }
+  $('vs-setup').hidden = true; $('vs-view').hidden = false; $('vp').hidden = false;
+  if (session?.id !== id) { $('vs-log').textContent = ''; logNext = 0; }
+  const seq = pollSeq, jid = currentJob.job_id;
+  const tick = async () => {
+    try {
+      const s = await getJSON(`/api/jobs/${jid}/video-sessions/${id}`);
+      if (seq !== pollSeq) return;
+      renderSession(s);
+      const log = await getJSON(`/api/jobs/${jid}/video-sessions/${id}/log?after=${logNext}`);
+      if (seq !== pollSeq) return;
+      if (log.lines.length) {
+        const box = $('vs-log'), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+        box.textContent += log.lines.join('\n') + '\n'; logNext = log.next;
+        if (atEnd) box.scrollTop = box.scrollHeight;
+      }
+      if (s.running) pollTimer = setTimeout(tick, 2000);
+      else refreshLabels();
+    } catch (e) {
+      if (seq !== pollSeq) return;
+      $('vp-msg').className = 'msg err'; $('vp-msg').textContent = 'Lost contact with the app (' + e.message + '). Retrying…';
+      pollTimer = setTimeout(tick, 4000);
+    }
+  };
+  tick();
+}
+async function refreshLabels() {   // update the session list and Saved jobs costs without changing the selection
+  if (!currentJob) return;
+  try {
+    const list = await getJSON(`/api/jobs/${currentJob.job_id}/video-sessions`);
+    [...$('vs-select').options].forEach(o => { const s = list.find(x => x.id === o.value); if (s) o.text = sessionLabel(s); });
+    loadJobs();
+  } catch (e) {}
+}
+
+const STATUS = { planning: ['Planning', 'run'], awaiting_approval: ['Waiting for your approval', 'run'], generating: ['Generating', 'run'],
+  assembling: ['Assembling', 'run'], completed: ['Completed', 'ok'], failed: ['Stopped', 'bad'], paused_budget: ['Paused: budget', 'bad'],
+  interrupted: ['Interrupted', 'bad'] };
+function renderSession(s) {
+  session = s;
+  const st = s.settings, [label, cls] = STATUS[s.status] || [s.status, ''];
+  $('vp-title').textContent = s.job_title;
+  $('vp-session').textContent = 'Session ' + s.id;
+  $('vp-started').textContent = 'started ' + new Date(s.created_at).toLocaleString();
+  $('vp-elapsed').textContent = 'elapsed ' + secs(s.elapsed);
+  $('vp-status').innerHTML = `<span class="tag ${cls}">${label}</span>`;
+  $('vp-models').textContent = [s.mode_name, 'planner ' + st.planner_name, st.image_name && 'images ' + st.image_name + (st.image_quality ? ` (${st.image_quality})` : ''),
+    st.video_name && `clips ${st.video_name} (${st.video_resolution}, via OpenRouter)`].filter(Boolean).join(' · ');
+  $('vp-step').textContent = `Step ${s.step} of ${s.steps.length}: ${s.step_text}`;
+  $('vp-progress').value = s.progress;
+  const c = s.cost;
+  $('vp-spent').textContent = money(c.spent);
+  $('vp-spent-kind').textContent = c.computed > 0 ? 'actual + computed' : 'actual';
+  $('vp-spent-kind').title = `Reported by OpenRouter: ${money(c.actual)}. Computed from published rates (provider reported no cost): ${money(c.computed)}.`
+    + (c.unconfirmed ? ` Calls in flight or interrupted (estimated): ${money(c.unconfirmed)}.` : '');
+  $('vp-total').textContent = money(c.estimated_total);
+  $('vp-total').title = `spent ${money(c.spent)} + in flight ${money(c.unconfirmed)} + still to generate ${money(c.remaining_work)}`;
+  if (document.activeElement !== $('vp-budget')) $('vp-budget').value = c.budget;
+  $('vp-budget').disabled = s.running;
+  $('vp-budget').title = s.running ? 'The cap can be changed when the session is not running.' : '';
+  $('vp-remaining').textContent = money(c.remaining);
+  $('vp-msg').className = 'msg' + (s.error ? ' err' : '');
+  $('vp-msg').textContent = [s.message, s.error].filter(Boolean).join(' ');
+  $('vp-approve').hidden = s.status !== 'awaiting_approval' || s.running;
+  $('vp-approve').textContent = `Approve & generate (estimated ${money(c.remaining_work)})`;
+  $('vp-resume').hidden = !['failed', 'paused_budget', 'interrupted'].includes(s.status) || s.running;
+  $('vp-new').disabled = s.running;
+  $('vp-new').title = s.running ? 'Wait for this session to finish before starting another one for the same job.' : '';
+  $('vs-notes').innerHTML = (s.notes || []).map(n => `<li>${esc(n)}</li>`).join('');
+  $('vs-style').textContent = s.plan ? `Shared style: ${s.plan.style}` : (s.status === 'planning' ? 'The planner is working…' : '');
+  renderPlan(s);
+  renderLedger(s);
+  renderInputs(s);
+  renderFinal(s);
+  updateSetup();
+}
+function renderPlan(s) {
+  const table = $('vs-plan-table');
+  if (table.contains(document.activeElement) && document.activeElement.dataset.prompt) return;   // do not wipe a prompt being edited
+  const approved = !!s.plan?.approved_at, busy = s.running ? 'disabled title="Wait for the session to finish."' : '';
+  const rows = s.visuals.map(v => {
+    const file = `visual_${String(v.id).padStart(3, '0')}${v.type === 'image' ? '.png' : '.mp4'}`;
+    const media = v.asset_url
+      ? (v.type === 'image' ? `<a href="${v.asset_url}" target="_blank"><img src="${v.asset_url}" alt="visual ${v.id}"></a>`
+                            : `<video src="${v.asset_url}" controls muted preload="metadata" playsinline></video>`)
+        + `<a class="download" style="margin-top:4px" href="${v.asset_url}&download=${file}">Download ${file}</a>`
+      : `<span class="status">${v.status === 'generating' ? 'generating…' : v.status === 'failed' ? 'missing – not generated' : 'not generated yet'}</span>`;
+    const [label, cls] = { done: ['done', 'ok'], generating: ['generating', 'run'], failed: ['failed', 'bad'], pending: ['pending', ''] }[v.status] || [v.status, ''];
+    const notes = [v.note, v.assembly_note, v.prompt_edited && 'prompt edited since this file was made', v.error].filter(Boolean);
+    return `<tr data-id="${v.id}">
+      <td class="num">${v.id}<br><span class="tag">${v.type}</span></td>
+      <td class="num">${v.start.toFixed(2)}–${v.end.toFixed(2)} s<div class="why">${v.duration.toFixed(2)} s${v.clip_seconds ? `<br>${v.clip_seconds} s clip` : ''}</div></td>
+      <td class="text">${esc(v.text)}<div class="why">Why: ${esc(v.reason)}</div></td>
+      <td style="min-width:240px"><textarea data-prompt="${v.id}" ${busy}>${esc(v.prompt)}</textarea>
+        <div class="acts">
+          <button class="ghost" data-save="${v.id}" ${busy}>Save prompt (free)</button>
+          ${approved ? `<button class="ghost" data-regen="${v.id}" ${busy}>${v.status === 'done' ? 'Regenerate' : 'Generate'} (~${money(v.estimate)})</button>` : ''}
+        </div>
+        ${v.reference_files?.length ? `<div class="why">Reference images sent: ${v.reference_files.map(esc).join(', ')}</div>` : '<div class="why">No reference images sent.</div>'}</td>
+      <td class="media">${media}</td>
+      <td class="num">${v.calls ? money(v.cost) + `<br><span class="tag">${v.cost_kind}</span>` : `~${money(v.estimate)}<br><span class="tag">estimated</span>`}</td>
+      <td><span class="tag ${cls}">${label}</span>${notes.map(n => `<div class="why">${esc(n)}</div>`).join('')}</td></tr>`;
+  }).join('');
+  table.innerHTML = s.visuals.length
+    ? `<tr><th>#</th><th>Time</th><th>Transcript text</th><th>Generation prompt</th><th>Visual</th><th class="num">Cost</th><th>Status</th></tr>${rows}`
+    : `<tr><td class="status">${s.status === 'planning' ? 'The planner is working on the plan…' : 'No plan yet.'}</td></tr>`;
+}
+$('vs-plan-table').onclick = async e => {
+  const save = e.target.dataset.save, regen = e.target.dataset.regen;
+  if (!save && !regen) return;
+  const id = save || regen, prompt = $('vs-plan-table').querySelector(`[data-prompt="${id}"]`).value;
+  const url = `/api/jobs/${currentJob.job_id}/video-sessions/${session.id}/visuals/${id}` + (regen ? '/regenerate' : '');
+  if (regen && !confirm(`Generate visual ${id} again? This is a new paid call (about ${money(session.visuals.find(v => v.id == id).estimate)}). The previous file is kept.`)) return;
+  e.target.blur();
+  const s = await call(url, json({ prompt }), $('vp-action-status'), e.target);
+  if (s) showSession(s.id);
+};
+function renderLedger(s) {
+  const rows = s.ledger.map(l => `<tr><td>${esc(l.time.slice(11))}</td><td>${esc(l.label)}${l.attempt > 1 ? ` (retry ${l.attempt - 1})` : ''}</td>
+    <td>${esc(l.model)}</td><td>${esc(l.units || '')}${l.provider_id ? `<div class="why">provider job ${esc(l.provider_id)}</div>` : ''}</td>
+    <td class="num">${l.latency != null ? l.latency + ' s' : ''}</td>
+    <td class="num">${l.cost != null ? money(l.cost) : '~' + money(l.estimate)}<br><span class="tag">${l.cost != null ? l.cost_kind : 'estimated'}</span></td>
+    <td><span class="tag ${l.status === 'ok' ? 'ok' : l.status === 'pending' ? 'run' : 'bad'}">${l.status}</span>${l.error ? `<div class="why">${esc(l.error)}</div>` : ''}
+      <div class="why">Estimate: ~${money(l.estimate)} = ${esc(l.estimate_basis)}</div></td></tr>`).join('');
+  const sum = s.ledger.reduce((a, l) => a + (l.status === 'ok' || l.status === 'failed' ? (l.cost || 0) : 0), 0);
+  $('vs-ledger').innerHTML = `<tr><th>Time</th><th>Step</th><th>Model</th><th>Units</th><th class="num">Latency</th><th class="num">Cost</th><th>Status / basis</th></tr>${rows}
+    <tr><td colspan="5"><b>Sum of all lines (retries and failed calls included)</b></td><td class="num"><b>${money(sum)}</b></td><td></td></tr>`;
+  const b = s.balance || {};
+  $('vs-balance').textContent = b.start != null
+    ? `OpenRouter key usage: ${money(b.start)} at the start (${b.start_at}), ${money(b.latest ?? b.start)} at ${b.latest_at || b.start_at}: a change of ${money((b.latest ?? b.start) - b.start)} vs ${money(s.cost.spent)} in this ledger. OpenRouter can take a few minutes to update usage.`
+    : '';
+}
+function renderInputs(s) {
+  const jid = s.job_id, src = s.source;
+  $('vs-used').innerHTML = `<ul>
+    <li>Narration: <b>${esc(s.narration.label)}</b> – ${esc(s.narration.file)}, ${s.narration.seconds.toFixed(2)} s</li>
+    <li>Original video: ${esc(src.video)}, ${src.width}x${src.height}, ${src.seconds.toFixed(2)} s. ${esc(src.video_note || '')}</li>
+    <li>Source frames ${esc(src.frames_how || '')}: ${(src.frames_shown || []).map(f => esc(f.file)).join(', ') || 'none'}</li>
+    <li>Final video: ${s.video.width}x${s.video.height}, ${s.video.seconds.toFixed(2)} s at ${s.video.fps} fps</li></ul>
+    <div class="frames-used">${(src.frames_shown || []).map(f => `<img src="/media/jobs/${jid}/${f.file}" title="${esc(f.file)} at ${f.time}s">`).join('')}</div>
+    <p class="why">Planner system prompt: ${s.settings.system_prompt_edited ? 'edited by you' : 'default'}. The exact prompt, input and raw response are in the activity log.</p>`;
+}
+function renderFinal(s) {
+  $('vs-final').hidden = !s.final;
+  if (!s.final) return;
+  const f = s.final;
+  if ($('vs-final-video').getAttribute('src') !== f.url) $('vs-final-video').src = f.url;
+  $('vs-final-download').href = f.download_url;
+  $('vs-final-facts').textContent = `${f.duration.toFixed(2)} s (original ${f.original_seconds.toFixed(2)} s: ${(f.ratio * 100).toFixed(1)}%, limit 105%) · ${f.width}x${f.height} · ${f.size_kb} KB · built ${f.built_at}`;
+  $('vs-checks').innerHTML = f.checks.map(c => `<tr><td><span class="tag ${c.ok ? 'ok' : 'bad'}">${c.ok ? 'pass' : 'fail'}</span></td><td>${esc(c.name)}</td><td>${esc(c.detail)}</td></tr>`).join('');
+}
+async function sessionAction(action, body) {
+  const s = await call(`/api/jobs/${currentJob.job_id}/video-sessions/${session.id}/${action}`, json(body || {}), $('vp-action-status'), null);
+  if (s) showSession(s.id);
+}
+$('vp-approve').onclick = () => sessionAction('approve');
+$('vp-resume').onclick = () => sessionAction('resume');
+$('vp-budget').onchange = () => sessionAction('budget', { budget: +$('vp-budget').value });
+
+// ---- startup ----
+async function checkBackend() {
+  try {
+    const h = await getJSON('/api/health', { cache: 'no-store' });
+    if (h.build !== $('build').dataset.build) throw new Error(`This page is from build ${$('build').dataset.build} but the server now runs build ${h.build}. Reload the page.`);
+    $('build').textContent = `Build ${h.build} · server started ${h.started_at} · process ${h.process_id}`;
+    $('app-health').hidden = true;
+  } catch (e) { $('app-health').textContent = e.message; $('app-health').hidden = false; }
+}
+checkBackend();
+loadCatalog();
+loadJobs().then(list => {
+  const saved = localStorage.getItem('youtube-current-job');
+  if (!currentJob && list.some(j => j.job_id === saved)) openJob(saved);
+});
+
 
 // ================= Voice =================
 let selectedVoice = null;
